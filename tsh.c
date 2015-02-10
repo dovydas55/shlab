@@ -11,6 +11,7 @@
  * SSN: 120492-2099
  * === End User Information ===
  */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -297,6 +298,16 @@ int builtin_cmd(char **argv)
   if(!strcmp(argv[0], "&")){ //ignore singleton &
     return 1; 
   }
+  
+  if(!strcmp(argv[0], "jobs")){ //list all jobs running
+    listjobs(jobs);
+    return 1;
+  }
+
+  if(!strcmp(argv[0], "bg") || !strcmp(argv[0], "fg")){ //run the process in background or foreground
+    do_bgfg(argv);
+    return 1; 
+  }  
 
   return 0; 
 }
@@ -314,7 +325,9 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-    return;
+
+  for(;pid == fgpid(jobs);){}
+  return;
 }
 
 /*****************
