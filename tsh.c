@@ -66,14 +66,14 @@ struct job_t jobs[MAXJOBS]; /* The job list */
 /* Here are the functions that you will implement */
 void eval(char *cmdline); /*in progress*/
 int builtin_cmd(char **argv); /*done*/
-void do_bgfg(char **argv); /*up next*/
+void do_bgfg(char **argv); 
 void waitfg(pid_t pid); /*done*/
 
 void sigchld_handler(int sig); /*almost done*/
-void sigtstp_handler(int sig);
-void sigint_handler(int sig);
+void sigtstp_handler(int sig); /*in progress*/
+void sigint_handler(int sig); /*in progress*/
 
-//fork from the text book
+//fork wrapper from the text book
 pid_t Fork(void); 
 
 /* Here are helper routines that we've provided for you */
@@ -322,7 +322,25 @@ int builtin_cmd(char **argv)
 void do_bgfg(char **argv) 
 {
 
-  // if(argv[1] == NULL)
+  /* if(argv[1] == NULL){
+    return; //checking for null
+  }
+
+  if(argv[1][0] == '%'){ //if % then we have a jobID
+    int jid = (int)argv[1][1]; 
+
+  }else if (isdigit(argv[1]){ //if its digit we have processID
+      pid_t pid = (int)argv[1];
+      
+  }
+    
+    if(!strcmp(argv[0], "bg")){ //do something in background
+
+
+    }else if(!strcmp(argv[0], "fg")){ //do something in foreground
+
+
+    }*/
   
   return; 
 }
@@ -372,6 +390,15 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
+
+    pid_t pid = fgpid(jobs);
+    struct job_t *job = getjobpid(jobs, pid);
+    if(pid != 0){
+      kill(-pid, SIGINT);
+
+      printf("Job [%d] (%d) terminated by signal %d", job->jid, job->pid, sig);
+      deletejob(jobs, pid); 
+    }
     return;
 }
 
@@ -382,6 +409,14 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+  pid_t pid = fgpid(jobs); //get pid from foreground job, returns 0 if no such job
+  struct job_t *job = getjobpid(jobs, pid);
+  if(pid != 0){
+
+    printf("Job [%d] (%d) terminated by signal %d", job->jid, job->pid, sig);
+    kill(-pid, SIGTSTP); //stop job from terminal
+  }
+  
     return;
 }
 
