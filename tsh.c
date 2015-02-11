@@ -205,10 +205,10 @@ void eval(char *cmdline){
 
   if(!builtin_cmd(argv)){
     
-    sigprocmask(SIG_BLOCK, &sigset, NULL);
+    sigprocmask(SIG_BLOCK, &sigset, NULL); //blocking signals to prevend race
 
     if((pid = Fork()) == 0){
-      sigprocmask(SIG_UNBLOCK, &sigset, NULL);
+      sigprocmask(SIG_UNBLOCK, &sigset, NULL); //unblocking signals
       if(execve(argv[0], argv, environ) < 0){
 	printf("%s: Command not found.\n", argv[0]);
 	exit(0); 
@@ -218,7 +218,7 @@ void eval(char *cmdline){
     addjob(jobs, pid, bg ? BG : FG, cmdline);
     sigprocmask(SIG_UNBLOCK, &sigset, NULL);
        
-    if(bg == 0){
+    if(bg == 0){ 
       waitfg(pid);
     } else {
       job = getjobpid(jobs, pid);
@@ -326,25 +326,36 @@ int builtin_cmd(char **argv)
 void do_bgfg(char **argv) 
 {
 
-  /* if(argv[1] == NULL){
+  char *id = argv[1];
+  int tempjid = 0;
+  if(argv[1] == NULL){
     return; //checking for null
   }
-
   if(argv[1][0] == '%'){ //if % then we have a jobID
-    int jid = (int)argv[1][1]; 
-
-  }else if (isdigit(argv[1]){ //if its digit we have processID
-      pid_t pid = (int)argv[1];
-      
+    int jid = atoi(&id[1]);
+    tempjid = jid;
+    struct job_t *job = getjobjid(jobs, jid);
+    if(job ==  0){
+      printf("there is no such job\n");
+    } 
   }
-    
-    if(!strcmp(argv[0], "bg")){ //do something in background
+  else if (isdigit(argv[1])){ //if its digit we have processID
+    pid_t pid = atoi(argv[1]);
+    tempjid = pid2jid(pid);
+      struct job_t *job = getjobpid(jobs, pid);
+      if(job == 0){
+	printf("there is no such process\n");
+      }
+  }
+  struct job_t *job = getjobjid(jobs, tempjid);
+  if(!strcmp(argv[0], "bg")){ //do something in background
+    printf("[%d] (%d) %s", job->jid, job->pid, job->cmdline);
+    job->state = BG;
 
-
-    }else if(!strcmp(argv[0], "fg")){ //do something in foreground
-
-
-    }*/
+  }else if(!strcmp(argv[0], "fg")){ //do something in foreground
+       job->state = FG;
+       waitfg(job->pid);
+  }
   
   return; 
 }
