@@ -70,8 +70,8 @@ void do_bgfg(char **argv);
 void waitfg(pid_t pid); /*done*/
 
 void sigchld_handler(int sig); /*almost done*/
-void sigtstp_handler(int sig); /*in progress*/
-void sigint_handler(int sig); /*in progress*/
+void sigtstp_handler(int sig); /*done*/
+void sigint_handler(int sig); /*done*/
 
 //fork wrapper from the text book
 pid_t Fork(void); 
@@ -194,26 +194,30 @@ void eval(char *cmdline){
   int bg; 
   pid_t pid;
   struct job_t *job; 
-  
+  sigset_t sigset; //for blocking signals 
+
   bg = parseline(cmdline, argv);
   if(argv[0] == NULL){
     return; //ignore empty line
   }
 
+  
+
   if(!builtin_cmd(argv)){
+    
+    sigprocmask(SIG_BLOCK, &sigset, NULL);
+
     if((pid = Fork()) == 0){
+      sigprocmask(SIG_UNBLOCK, &sigset, NULL);
       if(execve(argv[0], argv, environ) < 0){
 	printf("%s: Command not found.\n", argv[0]);
 	exit(0); 
       }
     } 
 
-    if(bg){
-      addjob(jobs, pid, BG, cmdline); 
-    } else {
-      addjob(jobs, pid, FG, cmdline); 
-    }
-    
+    addjob(jobs, pid, bg ? BG : FG, cmdline);
+    sigprocmask(SIG_UNBLOCK, &sigset, NULL);
+       
     if(bg == 0){
       waitfg(pid);
     } else {
@@ -235,55 +239,55 @@ void eval(char *cmdline){
  */
 int parseline(const char *cmdline, char **argv) 
 {
-    static char array[MAXLINE]; /* holds local copy of command line */
-    char *buf = array;          /* ptr that traverses command line */
-    char *delim;                /* points to first space delimiter */
-    int argc;                   /* number of args */
-    int bg;                     /* background job? */
+  static char array[MAXLINE]; /* holds local copy of command line */
+  char *buf = array;          /* ptr that traverses command line */
+  char *delim;                /* points to first space delimiter */
+  int argc;                   /* number of args */
+  int bg;                     /* background job? */
 
-    strcpy(buf, cmdline);
-    buf[strlen(buf)-1] = ' ';  /* replace trailing '\n' with space */
-    while (*buf && (*buf == ' ')) { /* ignore leading spaces */
-	buf++;
+  strcpy(buf, cmdline);
+  buf[strlen(buf)-1] = ' ';  /* replace trailing '\n' with space */
+  while (*buf && (*buf == ' ')) { /* ignore leading spaces */
+    buf++;
+  }
+
+  /* Build the argv list */
+  argc = 0;
+  if (*buf == '\'') {
+    buf++;
+    delim = strchr(buf, '\'');
+  }
+  else {
+    delim = strchr(buf, ' ');
+  }
+
+  while (delim) {
+    argv[argc++] = buf;
+    *delim = '\0';
+    buf = delim + 1;
+    while (*buf && (*buf == ' ')) { /* ignore spaces */
+      buf++;
     }
 
-    /* Build the argv list */
-    argc = 0;
     if (*buf == '\'') {
-	buf++;
-	delim = strchr(buf, '\'');
+      buf++;
+      delim = strchr(buf, '\'');
     }
     else {
-	delim = strchr(buf, ' ');
+      delim = strchr(buf, ' ');
     }
-
-    while (delim) {
-	argv[argc++] = buf;
-	*delim = '\0';
-	buf = delim + 1;
-	while (*buf && (*buf == ' ')) { /* ignore spaces */
-	    buf++;
-	}
-
-	if (*buf == '\'') {
-	    buf++;
-	    delim = strchr(buf, '\'');
-	}
-	else {
-	    delim = strchr(buf, ' ');
-	}
-    }
-    argv[argc] = NULL;
+  }
+  argv[argc] = NULL;
     
-    if (argc == 0) { /* ignore blank line */
-	return 1;
-    }
+  if (argc == 0) { /* ignore blank line */
+    return 1;
+  }
 
-    /* should the job run in the background? */
-    if ((bg = (*argv[argc-1] == '&')) != 0) {
-	argv[--argc] = NULL;
-    }
-    return bg;
+  /* should the job run in the background? */
+  if ((bg = (*argv[argc-1] == '&')) != 0) {
+    argv[--argc] = NULL;
+  }
+  return bg;
 }
 
 /* 
@@ -387,19 +391,24 @@ void sigchld_handler(int sig)
  * sigint_handler - The kernel sends a SIGINT to the shell whenver the
  *    user types ctrl-c at the keyboard.  Catch it and send it along
  *    to the foreground job.  
- */
+ */ 
 void sigint_handler(int sig) 
-{
-
-    pid_t pid = fgpid(jobs);
-    struct job_t *job = getjobpid(jobs, pid);
-    if(pid != 0){
-      kill(-pid, SIGINT);
-
-      printf("Job [%d] (%d) terminated by signal %d", job->jid, job->pid, sig);
-      deletejob(jobs, pid); 
-    }
-    return;
+{  
+  if (verbose) {
+    printf("sigint_handler: Enter\n");
+  }
+  pid_t pid = fgpid(jobs);
+  struct job_t *job = getjobpid(jobs, pid);
+  if(pid != 0){
+    kill(-pid, SIGINT);
+      
+    printf("Job [%d] (%d) terminated by signal %d\n", job->jid, job->pid, sig);
+    deletejob(jobs, pid); 
+  }
+  if (verbose) {
+    printf("sigint_handler: Exit\n");
+  }
+  return;
 }
 
 /*
@@ -409,12 +418,19 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+
+  //check if we are still in the foregroumd 
   pid_t pid = fgpid(jobs); //get pid from foreground job, returns 0 if no such job
   struct job_t *job = getjobpid(jobs, pid);
   if(pid != 0){
 
-    printf("Job [%d] (%d) terminated by signal %d", job->jid, job->pid, sig);
-    kill(-pid, SIGTSTP); //stop job from terminal
+    if(job->state == FG){
+     
+      printf("Job [%d] (%d) stopped by signal %d\n", job->jid, job->pid, sig);
+      job->state = ST;
+      kill(-pid, SIGTSTP); //stop job from terminal
+      
+    }    
   }
   
     return;
