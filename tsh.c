@@ -4,7 +4,7 @@
  * You __MUST__ add your user information here below
  * 
  * === User information ===
- * Group: NONE
+ * Group: DovyTelma
  * User 1: dovydas13
  * SSN: 100694-4179
  * User 2: telma13
@@ -64,16 +64,16 @@ struct job_t jobs[MAXJOBS]; /* The job list */
 /* Function prototypes */
 
 /* Here are the functions that you will implement */
-void eval(char *cmdline);
-int builtin_cmd(char **argv);
-void do_bgfg(char **argv);
-void waitfg(pid_t pid);
+void eval(char *cmdline); /*in progress*/
+int builtin_cmd(char **argv); /*done*/
+void do_bgfg(char **argv); /*up next*/
+void waitfg(pid_t pid); /*done*/
 
-void sigchld_handler(int sig);
+void sigchld_handler(int sig); /*almost done*/
 void sigtstp_handler(int sig);
 void sigint_handler(int sig);
 
-//helper function
+//fork from the text book
 pid_t Fork(void); 
 
 /* Here are helper routines that we've provided for you */
@@ -191,12 +191,11 @@ void eval(char *cmdline){
   //page 726
 
   char *argv[MAXARGS];
-  char buf[MAXLINE];
   int bg; 
   pid_t pid;
+  struct job_t *job; 
   
-  strcpy(buf, cmdline);
-  bg = parseline(buf, argv);
+  bg = parseline(cmdline, argv);
   if(argv[0] == NULL){
     return; //ignore empty line
   }
@@ -207,18 +206,23 @@ void eval(char *cmdline){
 	printf("%s: Command not found.\n", argv[0]);
 	exit(0); 
       }
+    } 
+
+    if(bg){
+      addjob(jobs, pid, BG, cmdline); 
+    } else {
+      addjob(jobs, pid, FG, cmdline); 
     }
     
-    if(!bg){
-      int status;
-      if(waitpid(pid, &status, 0) < 0){
-	unix_error("waitfg: waitpid error");
-      }
+    if(bg == 0){
+      waitfg(pid);
+    } else {
+      job = getjobpid(jobs, pid);
+      printf("[%d] (%d) %s", job->jid, job->pid, cmdline);
     }
-    else{
-      printf("%d %s", pid, cmdline);
-    }
+
   }
+
     return;
 }
 
@@ -284,7 +288,7 @@ int parseline(const char *cmdline, char **argv)
 
 /* 
  * builtin_cmd - If the user has typed a built-in command then execute
- *    it immediately.  
+ * it immediately.  
  */
 int builtin_cmd(char **argv) 
 {
@@ -317,7 +321,10 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
-    return;
+
+  // if(argv[1] == NULL)
+  
+  return; 
 }
 
 /* 
@@ -325,8 +332,11 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
+  struct job_t *job = getjobpid(jobs, pid);
+  while (job->state == FG){ //sleep while running in the foreground
+    sleep(1);
+  }
 
-  for(;pid == fgpid(jobs);){}
   return;
 }
 
@@ -343,7 +353,16 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
-    return;
+  int status;
+  pid_t pid; 
+  
+  //Note, using -1 so it would not continue until all parent's children would be reaped
+  //WNOHING = wait for child to terminate
+  while((pid = waitpid(-1, &status, WNOHANG)) > 0){
+    deletejob(jobs, pid); 
+  }
+
+  return;
 }
 
 /* 
