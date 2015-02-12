@@ -142,7 +142,7 @@ int main(int argc, char **argv)
 
     /* Execute the shell's read/eval loop */
     while (1) {
-
+     
 	/* Read command line */
 	if (emit_prompt) {
 	    printf("%s", prompt);
@@ -200,8 +200,6 @@ void eval(char *cmdline){
   if(argv[0] == NULL){
     return; //ignore empty line
   }
-
-  
 
   if(!builtin_cmd(argv)){
     
@@ -311,7 +309,7 @@ int builtin_cmd(char **argv)
     listjobs(jobs);
     return 1;
   }
-
+  
   if(!strcmp(argv[0], "bg") || !strcmp(argv[0], "fg")){ //run the process in background or foreground
     do_bgfg(argv);
     return 1; 
@@ -324,28 +322,34 @@ int builtin_cmd(char **argv)
  * do_bgfg - Execute the builtin bg and fg commands
  */
 void do_bgfg(char **argv) 
-{
-
+{  
   char *id = argv[1];
   int tempjid = 0;
   if(argv[1] == NULL){
+    printf("%s command requires PID or %%jobid argument\n", argv[0]);
     return; //checking for null
   }
   if(argv[1][0] == '%'){ //if % then we have a jobID
     int jid = atoi(&id[1]);
     tempjid = jid;
     struct job_t *job = getjobjid(jobs, jid);
-    if(job ==  0){
-      printf("there is no such job\n");
+    if(job == 0){
+      printf("%%%d: No such %%job\n", jid);
+      return;
     } 
   }
-  else if (isdigit(argv[1])){ //if its digit we have processID
+  else if (isdigit(id[0])){ //if its digit we have processID
     pid_t pid = atoi(argv[1]);
     tempjid = pid2jid(pid);
       struct job_t *job = getjobpid(jobs, pid);
       if(job == 0){
-	printf("there is no such process\n");
+	printf("(%d): No such process\n", pid);
+	return;
       }
+  }
+  else{
+    printf("%s: argument must be a PID or %%jobid\n", argv[0]);
+    return;
   }
   struct job_t *job = getjobjid(jobs, tempjid);
   if(!strcmp(argv[0], "bg")){ //do something in background
@@ -391,10 +395,23 @@ void sigchld_handler(int sig)
   
   //Note, using -1 so it would not continue until all parent's children would be reaped
   //WNOHING = wait for child to terminate
-  while((pid = waitpid(-1, &status, WNOHANG)) > 0){
-    deletejob(jobs, pid); 
-  }
+  while((pid = waitpid(-1, &status, WNOHANG|WUNTRACED)) > 0){
+    
 
+    if(WIFSTOPPED(status)){
+      printf("stopped");
+      sigtstp_handler(WSTOPSIG(status));
+    }
+    else if(WIFSIGNALED(status)){
+
+      sigint_handler(WTERMSIG(status));
+    }
+    else if(WIFEXITED(status)){
+      deletejob(jobs, pid); 
+    }
+
+  }
+  
   return;
 }
 
@@ -404,7 +421,7 @@ void sigchld_handler(int sig)
  *    to the foreground job.  
  */ 
 void sigint_handler(int sig) 
-{  
+{ 
   if (verbose) {
     printf("sigint_handler: Enter\n");
   }
@@ -429,7 +446,6 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
-
   //check if we are still in the foregroumd 
   pid_t pid = fgpid(jobs); //get pid from foreground job, returns 0 if no such job
   struct job_t *job = getjobpid(jobs, pid);
