@@ -11,13 +11,13 @@ TSTP
 jobs
 
 /bin/echo tsh> /bin/ps a
-/bin/ps a
+/bin/ps uxf
 
 /bin/echo tsh> fg %1
 fg %1
 
 /bin/echo tsh> /bin/ps a
-/bin/ps a
+/bin/ps uxf
 
 
 

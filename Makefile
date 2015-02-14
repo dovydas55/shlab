@@ -1,6 +1,19 @@
 # Makefile for the CS:APP Shell Lab
 
-TEAM = $(shell whoami)
+TEAM = $(shell egrep '^ *\* *Group:' tsh.c | sed -e 's/\*//g' -e 's/ *Group: *//g' | sed 's/ *\([^ ].*\) *$$/\1/g')
+USER_1 = $(shell egrep '^ *\* *User 1:' tsh.c | sed -e 's/\*//g' -e 's/ *User 1: *//g' | sed 's/ *\([^ ].*\) *$$/\1/g')
+USER_2 = $(shell egrep '^ *\* *User 2:' tsh.c | sed -e 's/\*//g' -e 's/ *User 2: *//g' | sed 's/ *\([^ ].*\) *$$/\1/g')
+
+ifeq "$(TEAM)" ""
+        TEAM = "NONE"
+endif
+ifeq "$(USER_1)" ""
+        USER_1 = "NONE"
+endif
+ifeq "$(USER_2)" ""
+        USER_2 = "NONE"
+endif
+
 VERSION = 1
 HANDINDIR = /labs/sty15/.handin/shlab/$(shell whoami)
 DRIVER = ./sdriver.pl
@@ -8,7 +21,7 @@ TSH = ./tsh
 TSHREF = ./tshref
 TSHARGS = "-p"
 CC = gcc
-CFLAGS = -Wall -O2
+CFLAGS = -Wall -O2 -g
 FILES = $(TSH) ./myspin ./mysplit ./mystop ./myint
 
 all: $(FILES)
@@ -17,6 +30,13 @@ all: $(FILES)
 # Handin your work
 ##################
 handin:
+	@echo "Team: \"$(TEAM)\""
+	@echo "User 1: \"$(USER_1)\""
+	@echo "User 2: \"$(USER_2)\""
+	@if [ "$(TEAM)" == "NONE" ]; then echo "Team name missing, please add it to the tsh.c file."; exit 1; fi
+	@if [ "$(USER_1)" != "NONE" ]; then getent passwd $(USER_1) > /dev/null; if [ $$? -ne 0 ]; then echo "User $(USER_1) does not exceist on Skel."; exit 2; fi; fi
+	@if [ "$(USER_2)" != "NONE" ]; then getent passwd $(USER_2) > /dev/null; if [ $$? -ne 0 ]; then echo "User $(USER_2) does not exceist on Skel."; exit 3; fi; fi
+
 	cp tsh.c $(HANDINDIR)/$(TEAM)-$(VERSION)-tsh.c
 	chmod 700 $(HANDINDIR)/$(TEAM)-$(VERSION)-tsh.c
 

@@ -8,5 +8,5 @@ SLEEP 2
 INT
 
 /bin/echo tsh> /bin/ps a
-/bin/ps a
+/bin/ps uxf
 
